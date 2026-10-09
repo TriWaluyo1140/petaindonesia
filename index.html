@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Peta Indonesia Pro</title>
+    <title>Peta Indonesia Pro - Pencarian Wilayah</title>
 
-    <!-- Memuat Font Google (Roboto, standar Material Design / Google) -->
+    <!-- Memuat Font Google -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     
-    <!-- Memuat Google Material Symbols (Ikon yang sama dengan Google Maps) -->
+    <!-- Memuat Google Material Symbols -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,1,0" />
 
     <!-- Memuat Tailwind CSS -->
@@ -39,7 +39,7 @@
             margin: 0; 
             padding: 0; 
             overflow: hidden; 
-            background-color: #e5e3df; /* Warna latar belakang khas map saat loading */
+            background-color: #e5e3df; 
         }
         
         #map { 
@@ -48,23 +48,19 @@
             z-index: 1; 
         }
 
-        /* Menghilangkan kontrol zoom bawaan */
         .leaflet-control-zoom { display: none !important; }
         .leaflet-control-attribution { 
             background: rgba(255,255,255,0.7) !important; 
             font-size: 10px !important;
         }
 
-        /* Animasi untuk panel samping/bawah */
         .panel-transition {
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        /* Efek Scrollbar tersembunyi */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-        /* Kustomisasi Marker (Pin) */
         .custom-pin {
             display: flex;
             align-items: center;
@@ -77,61 +73,74 @@
             100% { transform: translateY(0) scale(1); opacity: 1; }
         }
 
-        /* Ikon Google Maps Material Symbol */
         .material-symbols-rounded {
             font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
         }
         .icon-filled {
             font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
         }
+
+        /* Animasi loading pencarian */
+        .loader {
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #1a73e8;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+            display: none; /* Sembunyikan secara default */
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
-<body class="text-slate-800 antialiased">
+<body class="text-slate-800 antialiased relative">
 
     <!-- Kontainer Peta Utama -->
     <div id="map"></div>
 
-    <!-- Layar Loading -->
-    <div id="loading-screen" class="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-white transition-opacity duration-500">
-        <div class="animate-spin rounded-full h-12 w-12 border-4 border-google-gray border-t-google-blue mb-4"></div>
-        <h1 class="text-lg font-medium text-slate-700">Memuat Peta Indonesia...</h1>
-    </div>
-
-    <!-- UI Overlay: Kotak Pencarian / Header (Kiri Atas) -->
+    <!-- UI Overlay: Kotak Pencarian -->
     <div class="absolute top-4 left-4 right-4 md:right-auto md:w-[400px] z-[1000] flex flex-col gap-2">
-        <div class="bg-white rounded-full shadow-[0_2px_6px_rgba(0,0,0,0.3)] flex items-center px-4 py-3 cursor-pointer hover:shadow-lg transition-shadow" id="search-box">
-            <span class="material-symbols-rounded text-slate-500 mr-3">menu</span>
-            <input type="text" readonly value="Peta Interaktif Indonesia" class="flex-1 bg-transparent outline-none text-[15px] font-medium text-slate-700 cursor-pointer pointer-events-none">
-            <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-google-blue font-bold text-sm">
-                ID
+        <div class="bg-white rounded-2xl shadow-[0_2px_6px_rgba(0,0,0,0.3)] flex flex-col overflow-hidden transition-shadow focus-within:shadow-lg">
+            <!-- Input Area -->
+            <div class="flex items-center px-4 py-3 relative">
+                <span id="search-icon" class="material-symbols-rounded text-slate-500 mr-3">search</span>
+                <div id="search-loader" class="loader absolute left-4"></div>
+                <input type="text" id="search-input" placeholder="Cari kelurahan, kecamatan, kota..." class="flex-1 bg-transparent outline-none text-[15px] font-medium text-slate-700 placeholder-slate-400">
+                <button id="clear-search" class="hidden text-slate-400 hover:text-slate-600 ml-2">
+                    <span class="material-symbols-rounded text-[20px]">close</span>
+                </button>
+            </div>
+            
+            <!-- Dropdown Hasil Pencarian -->
+            <div id="search-results" class="max-h-[60vh] overflow-y-auto no-scrollbar hidden border-t border-slate-100">
+                <!-- Item hasil akan disuntikkan ke sini melalui JS -->
             </div>
         </div>
     </div>
 
-    <!-- Panel Info Provinsi (Sidebar di Desktop, Bottom Sheet di Mobile) -->
+    <!-- Panel Info (Muncul setelah pencarian/klik) -->
     <div id="info-panel" class="absolute z-[1000] bg-white panel-transition shadow-[0_8px_24px_rgba(0,0,0,0.15)] 
-        /* Mobile: Muncul dari bawah */
         bottom-0 left-0 right-0 rounded-t-3xl h-[65vh] translate-y-full
-        /* Desktop: Muncul dari kiri */
         md:top-20 md:bottom-4 md:left-4 md:right-auto md:w-[400px] md:h-auto md:rounded-2xl md:-translate-x-[120%] md:translate-y-0
         flex flex-col overflow-hidden">
         
-        <!-- Header Image Area (Foto Pemandangan) -->
-        <div class="relative h-48 w-full bg-slate-200 shrink-0">
-            <img id="prov-image" src="" alt="Pemandangan" class="w-full h-full object-cover">
-            
-            <!-- Tombol Tutup Panel -->
+        <!-- Header Image Area (Foto Pemandangan Dinamis) -->
+        <div class="relative h-40 md:h-48 w-full bg-slate-200 shrink-0">
+            <img id="prov-image" src="" alt="Pemandangan Wilayah" class="w-full h-full object-cover">
             <button id="close-panel" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-black/40 text-white flex items-center justify-center backdrop-blur-sm hover:bg-black/60 transition-colors">
                 <span class="material-symbols-rounded text-sm">close</span>
             </button>
+            <!-- Badge Tipe Administratif (misal: Kelurahan/Kecamatan) -->
+            <div id="admin-badge" class="absolute bottom-4 left-4 bg-black/60 backdrop-blur-md text-white text-xs font-medium px-2 py-1 rounded-md">
+                Wilayah
+            </div>
         </div>
 
-        <!-- Area Konten (Scrollable) -->
+        <!-- Area Konten Detail -->
         <div class="flex-1 overflow-y-auto no-scrollbar p-5 pb-8">
-            <h1 id="prov-name" class="text-2xl font-normal text-slate-900 mb-1">Nama Provinsi</h1>
-            <p class="text-sm text-slate-500 mb-4 border-b border-slate-100 pb-4">Provinsi di Indonesia</p>
+            <h1 id="prov-name" class="text-2xl font-normal text-slate-900 mb-1 leading-tight">Nama Lokasi</h1>
+            <p id="prov-address" class="text-sm text-slate-500 mb-4 border-b border-slate-100 pb-4 leading-relaxed">Alamat Lengkap</p>
 
-            <!-- Aksi Cepat (Tombol ala Google Maps) -->
             <div class="flex justify-around mb-6 border-b border-slate-100 pb-6">
                 <button class="flex flex-col items-center gap-1.5 text-google-blue hover:text-blue-800 transition-colors group">
                     <div class="w-10 h-10 rounded-full bg-blue-50 group-hover:bg-blue-100 flex items-center justify-center">
@@ -153,34 +162,20 @@
                 </button>
             </div>
 
-            <!-- Detail Informasi -->
+            <!-- Informasi Tambahan -->
             <div class="space-y-4">
                 <div class="flex items-start gap-4">
-                    <span class="material-symbols-rounded text-slate-400 mt-0.5">location_city</span>
+                    <span class="material-symbols-rounded text-slate-400 mt-0.5">map</span>
                     <div>
-                        <p class="text-[13px] text-slate-500 font-medium">Ibu Kota</p>
-                        <p id="prov-capital" class="text-[15px] text-slate-800 mt-0.5">-</p>
-                    </div>
-                </div>
-                <div class="flex items-start gap-4">
-                    <span class="material-symbols-rounded text-slate-400 mt-0.5">group</span>
-                    <div>
-                        <p class="text-[13px] text-slate-500 font-medium">Populasi Penduduk</p>
-                        <p id="prov-pop" class="text-[15px] text-slate-800 mt-0.5">-</p>
-                    </div>
-                </div>
-                <div class="flex items-start gap-4">
-                    <span class="material-symbols-rounded text-slate-400 mt-0.5">straighten</span>
-                    <div>
-                        <p class="text-[13px] text-slate-500 font-medium">Luas Wilayah</p>
-                        <p id="prov-area" class="text-[15px] text-slate-800 mt-0.5">-</p>
+                        <p class="text-[13px] text-slate-500 font-medium">Koordinat Pusat</p>
+                        <p id="prov-coord" class="text-[14px] text-slate-800 mt-0.5 font-mono">-</p>
                     </div>
                 </div>
                 <div class="flex items-start gap-4 pt-2">
                     <span class="material-symbols-rounded text-slate-400 mt-0.5">info</span>
                     <div>
                         <p class="text-[13px] text-slate-600 leading-relaxed">
-                            Data ini merupakan simulasi interaktif. Klik area lain di peta untuk melihat detail provinsi lainnya.
+                            Batas wilayah (poligon) didapatkan secara dinamis dari OpenStreetMap berdasarkan pencarian Anda.
                         </p>
                     </div>
                 </div>
@@ -190,20 +185,16 @@
 
     <!-- Grup Tombol Aksi (Kanan Bawah) -->
     <div class="absolute bottom-6 right-4 z-[1000] flex flex-col gap-3">
-        
-        <!-- Toggle Tipe Peta (Satelit / Jalan) -->
-        <button id="toggle-layer" class="w-12 h-12 bg-white rounded-lg shadow-[0_2px_6px_rgba(0,0,0,0.3)] flex flex-col items-center justify-center hover:bg-slate-50 transition-colors group overflow-hidden relative">
+        <button id="toggle-layer" class="w-12 h-12 bg-white rounded-lg shadow-[0_2px_6px_rgba(0,0,0,0.3)] flex flex-col items-center justify-center hover:bg-slate-50 transition-colors group overflow-hidden relative" title="Ganti Tipe Peta">
             <img id="layer-thumbnail" src="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/4/8/12" class="absolute inset-0 w-full h-full object-cover opacity-80" alt="Layer">
             <div class="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors"></div>
             <span class="material-symbols-rounded text-white z-10 drop-shadow-md">layers</span>
         </button>
 
-        <!-- Tombol Lokasi Asal (Reset) -->
-        <button id="reset-map" class="w-12 h-12 bg-white rounded-full shadow-[0_2px_6px_rgba(0,0,0,0.3)] flex items-center justify-center text-slate-600 hover:text-google-blue hover:bg-slate-50 transition-colors">
+        <button id="reset-map" class="w-12 h-12 bg-white rounded-full shadow-[0_2px_6px_rgba(0,0,0,0.3)] flex items-center justify-center text-slate-600 hover:text-google-blue hover:bg-slate-50 transition-colors" title="Kembali ke Tampilan Indonesia">
             <span class="material-symbols-rounded icon-filled">my_location</span>
         </button>
 
-        <!-- Grup Zoom -->
         <div class="bg-white rounded-lg shadow-[0_2px_6px_rgba(0,0,0,0.3)] flex flex-col overflow-hidden">
             <button id="zoom-in" class="w-12 h-12 flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-colors border-b border-slate-200">
                 <span class="material-symbols-rounded">add</span>
@@ -218,108 +209,65 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
     
     <script>
-        // 1. Konfigurasi Awal Peta
+        // --- 1. Konfigurasi Awal Peta ---
         const isMobile = window.innerWidth < 768;
         const initialCenter = [-2.5, 118.0]; // Titik tengah Indonesia
         const initialZoom = isMobile ? 4.5 : 5.5;
 
         const map = L.map('map', {
-            zoomControl: false, // Dimatikan karena kita pakai tombol kustom
+            zoomControl: false,
             minZoom: 4,
-            maxZoom: 14,
+            maxZoom: 18, // Ditingkatkan agar bisa zoom dekat ke level kelurahan
             zoomAnimation: true
         }).setView(initialCenter, initialZoom);
 
-        // 2. Definisi Peta Dasar (Basemaps) ala Google Maps
-        // Peta Jalan (Mirip Google Maps Default)
+        // Peta Dasar
         const streetLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
             attribution: 'Tiles &copy; Esri'
         });
-
-        // Peta Satelit
         const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
             attribution: 'Tiles &copy; Esri'
         });
 
-        // Tambahkan peta jalan sebagai default
         streetLayer.addTo(map);
+        let currentLayer = 'street';
 
-        let currentLayer = 'street'; // Menyimpan status tipe peta yang aktif
-        let geojsonLayer;
-        let activeMarker = null; // Menyimpan pin lokasi yang sedang aktif
+        // --- 2. Variabel State Global ---
+        let baseProvinceLayer = null; // Menyimpan layer statis provinsi awal
+        let activeSearchLayer = null; // Menyimpan polygon batas wilayah hasil pencarian (Kecamatan/Kelurahan)
+        let activeMarker = null; // Pin merah
 
-        // Data referensi (gabungan data asli & URL gambar Unsplash yang cantik)
-        const provData = {
-            "DKI JAKARTA": { capital: "Jakarta", pop: "10.56 Juta", area: "664 km²", imgId: "1555899434-112347314545" }, // Jakarta skyline
-            "BALI": { capital: "Denpasar", pop: "4.32 Juta", area: "5,780 km²", imgId: "1537996194471-e657df975ab4" }, // Bali temple/rice terrace
-            "PAPUA": { capital: "Jayapura", pop: "4.30 Juta", area: "319,036 km²", imgId: "1592398539201-382902b938c6" }, // Raja Ampat/Nature
-            "JAWA BARAT": { capital: "Bandung", pop: "48.27 Juta", area: "35,377 km²", imgId: "1632059345091-b3b3a37f59d5" },
-            "DI YOGYAKARTA": { capital: "Yogyakarta", pop: "3.88 Juta", area: "3,133 km²", imgId: "1588693156557-0a3791242337" }, // Borobudur/Prambanan vibe
-            "JAWA TIMUR": { capital: "Surabaya", pop: "40.67 Juta", area: "47,800 km²", imgId: "1603565816030-6b389eeba8fa" }, // Bromo
-            "SUMATERA BARAT": { capital: "Padang", pop: "5.53 Juta", area: "42,012 km²", imgId: "1587595431973-162d0d94add1" } // Rumah Gadang/Nature
-        };
-
-        // Fungsi utilitas hash
-        function hashString(str) {
-            let hash = 0;
-            for (let i = 0; i < str.length; i++) hash = ((hash << 5) - hash) + str.charCodeAt(i);
-            return Math.abs(hash);
-        }
-
-        // Mengekstrak nama provinsi
-        function getProvName(feature) {
-            if (!feature || !feature.properties) return "Provinsi";
-            return (feature.properties.Propinsi || feature.properties.NAME_1 || "Provinsi").toUpperCase();
-        }
-
-        // Mendapatkan data dan gambar provinsi
-        function getEnrichedData(provName) {
-            let data = provData[provName];
-            
-            // Generate data acak jika tidak ada di database statis
-            if (!data) {
-                const hash = hashString(provName);
-                const words = provName.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1));
-                
-                // Kumpulan ID gambar pemandangan alam/kota Indonesia dari Unsplash untuk fallback
-                const fallbackImages = ["1584314417721-a3f295b9d3e8", "1512100253150-128c77229e61", "1576402758129-8f430485600c", "1620023605206-8c4d2847fc72"];
-                const imgId = fallbackImages[hash % fallbackImages.length];
-
-                data = {
-                    capital: "Kota " + words[0],
-                    pop: (1 + (hash % 5)) + "." + (10 + (hash % 89)) + " Juta",
-                    area: (10 + (hash % 90)) + "," + (100 + (hash % 899)) + " km²",
-                    imgId: imgId
-                };
-            }
-            
-            // Format URL Unsplash
-            data.imgUrl = `https://images.unsplash.com/photo-${data.imgId}?auto=format&fit=crop&w=600&q=80`;
-            return data;
-        }
-
-        // Referensi Elemen DOM
         const infoPanel = document.getElementById('info-panel');
-        const closePanelBtn = document.getElementById('close-panel');
-        let selectedLayer = null; // Menyimpan polygon yang sedang dipilih
+        const searchInput = document.getElementById('search-input');
+        const searchResultsContainer = document.getElementById('search-results');
+        const searchIcon = document.getElementById('search-icon');
+        const searchLoader = document.getElementById('search-loader');
+        const clearSearchBtn = document.getElementById('clear-search');
 
-        function openPanel(provName) {
-            const data = getEnrichedData(provName);
-            
-            // Update konten DOM
-            document.getElementById('prov-name').innerText = provName;
-            document.getElementById('prov-capital').innerText = data.capital;
-            document.getElementById('prov-pop').innerText = data.pop;
-            document.getElementById('prov-area').innerText = data.area;
-            
-            // Update gambar dengan fallback jika gagal dimuat
-            const imgEl = document.getElementById('prov-image');
-            imgEl.src = data.imgUrl;
-            imgEl.onerror = () => {
-                imgEl.src = `https://placehold.co/600x400/e2e8f0/64748b?text=${provName}`;
-            };
+        // --- 3. Fungsi Panel UI ---
+        function openPanel(data) {
+            // Parsing data dari Nominatim API OpenStreetMap
+            const name = data.name || data.display_name.split(',')[0];
+            const fullName = data.display_name;
+            const lat = parseFloat(data.lat).toFixed(5);
+            const lon = parseFloat(data.lon).toFixed(5);
+            const type = data.addresstype || data.type || "Wilayah";
 
-            // Animasi masuk (menyesuaikan mobile/desktop)
+            document.getElementById('prov-name').innerText = name;
+            document.getElementById('prov-address').innerText = fullName;
+            document.getElementById('prov-coord').innerText = `${lat}, ${lon}`;
+            
+            // Format Badge (Kapitalisasi huruf pertama)
+            const typeFormatted = type.charAt(0).toUpperCase() + type.slice(1);
+            document.getElementById('admin-badge').innerText = typeFormatted;
+
+            // Gambar acak berdasarkan hash nama untuk mempercantik UI
+            const hash = Array.from(name).reduce((acc, char) => acc + char.charCodeAt(0), 0);
+            const imgIds = ["1584314417721-a3f295b9d3e8", "1512100253150-128c77229e61", "1576402758129-8f430485600c", "1620023605206-8c4d2847fc72", "1537996194471-e657df975ab4", "1555899434-112347314545"];
+            const imgUrl = `https://images.unsplash.com/photo-${imgIds[hash % imgIds.length]}?auto=format&fit=crop&w=600&q=80`;
+            document.getElementById('prov-image').src = imgUrl;
+
+            // Animasi masuk
             if (isMobile) {
                 infoPanel.classList.remove('translate-y-full');
                 infoPanel.classList.add('translate-y-0');
@@ -330,7 +278,6 @@
         }
 
         function closePanel() {
-            // Animasi keluar
             if (isMobile) {
                 infoPanel.classList.remove('translate-y-0');
                 infoPanel.classList.add('translate-y-full');
@@ -339,195 +286,224 @@
                 infoPanel.classList.add('md:-translate-x-[120%]');
             }
             
-            // Reset gaya polygon yang dipilih
-            if (selectedLayer && geojsonLayer) {
-                geojsonLayer.resetStyle(selectedLayer);
-                selectedLayer = null;
+            // Jangan hapus marker dan poly saat tutup panel agar user masih bisa lihat di peta
+            // Mereka akan dihapus saat reset peta atau pencarian baru
+        }
+        document.getElementById('close-panel').addEventListener('click', closePanel);
+
+        // --- 4. Logika Pencarian (Geocoding dengan OSM Nominatim) ---
+        let searchTimeout = null;
+
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.trim();
+            
+            if (query.length > 0) {
+                clearSearchBtn.classList.remove('hidden');
+            } else {
+                clearSearchBtn.classList.add('hidden');
+                searchResultsContainer.classList.add('hidden');
+                searchResultsContainer.innerHTML = '';
             }
 
-            // Hapus marker jika ada
-            if (activeMarker) {
-                map.removeLayer(activeMarker);
-                activeMarker = null;
+            // Debounce: Tunggu user selesai mengetik agar tidak spam API
+            clearTimeout(searchTimeout);
+            if (query.length > 2) {
+                searchTimeout = setTimeout(() => {
+                    performSearch(query);
+                }, 800);
             }
-        }
+        });
 
-        closePanelBtn.addEventListener('click', closePanel);
+        clearSearchBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            clearSearchBtn.classList.add('hidden');
+            searchResultsContainer.classList.add('hidden');
+            searchResultsContainer.innerHTML = '';
+            searchInput.focus();
+        });
 
-        // Gaya default: Transparan, garis tipis (seperti mode peta biasa)
-        function baseStyle() {
-            return {
-                fillColor: '#1a73e8', // Warna biru Google
-                weight: 1,
-                opacity: 0.4,
-                color: '#666',
-                fillOpacity: 0.0 // Sepenuhnya transparan sampai disorot
-            };
-        }
-
-        function highlightFeature(e) {
-            const layer = e.target;
-            // Hanya highlight jika belum dipilih (diklik)
-            if (selectedLayer !== layer) {
-                layer.setStyle({
-                    weight: 2,
-                    color: '#1a73e8',
-                    fillOpacity: 0.15
+        async function performSearch(query) {
+            // Tampilkan animasi loading
+            searchIcon.style.display = 'none';
+            searchLoader.style.display = 'block';
+            
+            try {
+                // Endpoint Nominatim: Batasi negara ID, ambil poligon (geojson=1)
+                const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&countrycodes=id&format=json&polygon_geojson=1&limit=5`;
+                const response = await fetch(url, {
+                    headers: { 'Accept-Language': 'id' } // Paksa respon bahasa Indonesia
                 });
-                if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) layer.bringToFront();
                 
-                // Pastikan layer yang dipilih (jika ada) tetap paling depan
-                if (selectedLayer) selectedLayer.bringToFront();
+                const results = await response.json();
+                renderSearchResults(results);
+            } catch (error) {
+                console.error("Gagal melakukan pencarian:", error);
+                renderSearchError();
+            } finally {
+                searchIcon.style.display = 'block';
+                searchLoader.style.display = 'none';
             }
         }
 
-        function resetHighlight(e) {
-            const layer = e.target;
-            // Hanya reset jika bukan layer yang sedang dipilih
-            if (selectedLayer !== layer) {
-                geojsonLayer.resetStyle(layer);
+        function renderSearchResults(results) {
+            searchResultsContainer.innerHTML = '';
+            
+            if (results.length === 0) {
+                searchResultsContainer.innerHTML = `
+                    <div class="px-4 py-3 text-sm text-slate-500 text-center">
+                        Lokasi tidak ditemukan. Coba nama yang lebih spesifik (misal: "Kelurahan Menteng").
+                    </div>
+                `;
+                searchResultsContainer.classList.remove('hidden');
+                return;
             }
+
+            results.forEach(item => {
+                // Pisahkan nama utama dan konteks alamat
+                const parts = item.display_name.split(', ');
+                const mainName = item.name || parts[0];
+                const contextName = parts.slice(1).join(', ');
+                
+                // Ikon berdasarkan tipe (administrative, city, dll)
+                let iconName = 'location_on';
+                if (item.class === 'boundary' || item.type === 'administrative') iconName = 'map';
+                if (item.type === 'city' || item.type === 'town') iconName = 'location_city';
+
+                const div = document.createElement('div');
+                div.className = "px-4 py-3 hover:bg-slate-50 cursor-pointer flex items-start gap-3 border-b border-slate-50 last:border-none transition-colors";
+                div.innerHTML = `
+                    <span class="material-symbols-rounded text-slate-400 text-[20px] mt-0.5">${iconName}</span>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-[14px] font-medium text-slate-800 truncate">${mainName}</p>
+                        <p class="text-[12px] text-slate-500 truncate mt-0.5">${contextName}</p>
+                    </div>
+                `;
+                
+                // Event saat hasil pencarian diklik
+                div.addEventListener('click', () => {
+                    searchResultsContainer.classList.add('hidden');
+                    searchInput.value = mainName;
+                    drawBoundaryAndFly(item);
+                });
+                
+                searchResultsContainer.appendChild(div);
+            });
+            
+            searchResultsContainer.classList.remove('hidden');
         }
 
-        function zoomToFeature(e) {
-            const layer = e.target;
-            const provName = getProvName(layer.feature);
-            
-            // Reset layer sebelumnya
-            if (selectedLayer && selectedLayer !== layer) {
-                geojsonLayer.resetStyle(selectedLayer);
-            }
-            
-            selectedLayer = layer;
+        function renderSearchError() {
+            searchResultsContainer.innerHTML = `
+                <div class="px-4 py-3 text-sm text-red-500 text-center">
+                    Terjadi kesalahan jaringan saat mencari lokasi.
+                </div>
+            `;
+            searchResultsContainer.classList.remove('hidden');
+        }
 
-            // Beri gaya tebal & isi biru pada layer yang dipilih (Khas pemilihan area Google Maps)
-            layer.setStyle({
-                weight: 3,
-                color: '#1a73e8',
-                fillColor: '#1a73e8',
-                fillOpacity: 0.2
-            });
-            layer.bringToFront();
-
-            // Dapatkan titik tengah untuk menaruh Pin
-            const bounds = layer.getBounds();
-            const center = bounds.getCenter();
-
-            // Zoom peta ke area tersebut, dengan padding untuk panel
-            map.flyToBounds(bounds, {
-                paddingTopLeft: [isMobile ? 10 : 420, isMobile ? 10 : 20],
-                paddingBottomRight: [isMobile ? 10 : 20, isMobile ? window.innerHeight * 0.6 : 20],
-                maxZoom: 7,
-                duration: 1.5 // Animasi mulus
-            });
-
-            // Hapus pin lama
+        // --- 5. Fungsi Render Peta (Boundary & Marker) ---
+        function drawBoundaryAndFly(item) {
+            // Hapus hasil pencarian sebelumnya
+            if (activeSearchLayer) map.removeLayer(activeSearchLayer);
             if (activeMarker) map.removeLayer(activeMarker);
 
-            // Buat Ikon Pin ala Google Maps Merah
+            // Jika item memiliki GeoJSON (poligon batas wilayah/kelurahan/kecamatan)
+            if (item.geojson && (item.geojson.type === 'Polygon' || item.geojson.type === 'MultiPolygon')) {
+                activeSearchLayer = L.geoJSON(item.geojson, {
+                    style: {
+                        color: '#1a73e8', // Biru Google Maps
+                        weight: 3,
+                        opacity: 0.8,
+                        fillColor: '#1a73e8',
+                        fillOpacity: 0.15
+                    }
+                }).addTo(map);
+
+                // Dapatkan bounds (kotak batas) dari poligon untuk di zoom
+                const bounds = activeSearchLayer.getBounds();
+                map.flyToBounds(bounds, {
+                    paddingTopLeft: [isMobile ? 10 : 420, isMobile ? 10 : 20],
+                    paddingBottomRight: [isMobile ? 10 : 20, isMobile ? window.innerHeight * 0.6 : 20],
+                    duration: 1.5
+                });
+                
+                // Taruh pin di tengah poligon
+                placeCustomPin(bounds.getCenter());
+            } else {
+                // Jika tidak ada batas wilayah, sekadar terbang ke titik koordinatnya
+                const lat = parseFloat(item.lat);
+                const lon = parseFloat(item.lon);
+                map.flyTo([lat, lon], 14, { duration: 1.5 });
+                placeCustomPin([lat, lon]);
+            }
+
+            // Buka panel info
+            openPanel(item);
+        }
+
+        function placeCustomPin(latlng) {
             const customIcon = L.divIcon({
                 className: 'custom-pin',
                 html: `<span class="material-symbols-rounded icon-filled text-[40px] text-red-600 drop-shadow-md" style="text-shadow: 0 4px 6px rgba(0,0,0,0.3);">location_on</span>`,
                 iconSize: [40, 40],
-                iconAnchor: [20, 40] // Titik bawah pin sejajar dengan koordinat
+                iconAnchor: [20, 40]
             });
 
-            // Tambahkan Pin baru dengan sedikit delay agar selaras dengan animasi zoom
             setTimeout(() => {
-                activeMarker = L.marker(center, { icon: customIcon }).addTo(map);
-            }, 300);
-
-            // Buka Panel
-            openPanel(provName);
+                activeMarker = L.marker(latlng, { icon: customIcon }).addTo(map);
+            }, 500); // Delay sedikit agar barengan dengan animasi terbang
         }
 
-        function onEachFeature(feature, layer) {
-            // Hilangkan tooltip untuk tampilan yang lebih bersih, user bergantung pada klik
-            layer.on({
-                mouseover: highlightFeature,
-                mouseout: resetHighlight,
-                click: zoomToFeature
-            });
-        }
-
-        // Event Listener untuk Tombol Kontrol
+        // --- 6. Event Listener Tombol Peta ---
         document.getElementById('zoom-in').addEventListener('click', () => map.zoomIn());
         document.getElementById('zoom-out').addEventListener('click', () => map.zoomOut());
         
         document.getElementById('reset-map').addEventListener('click', () => {
             closePanel();
+            searchInput.value = '';
+            clearSearchBtn.classList.add('hidden');
+            
+            // Hapus layer pencarian
+            if (activeSearchLayer) map.removeLayer(activeSearchLayer);
+            if (activeMarker) map.removeLayer(activeMarker);
+            
+            // Terbang kembali ke titik tengah Indonesia
             map.flyTo(initialCenter, initialZoom, { duration: 1.5 });
         });
 
-        // Toggle Layer (Jalan <-> Satelit)
-        const toggleLayerBtn = document.getElementById('toggle-layer');
-        const layerThumbnail = document.getElementById('layer-thumbnail');
-        
-        toggleLayerBtn.addEventListener('click', () => {
+        // Toggle Layer (Satelit vs Jalan)
+        document.getElementById('toggle-layer').addEventListener('click', () => {
+            const layerThumbnail = document.getElementById('layer-thumbnail');
             if (currentLayer === 'street') {
                 map.removeLayer(streetLayer);
                 satelliteLayer.addTo(map);
                 currentLayer = 'satellite';
-                // Ubah thumbnail di tombol ke gambar map jalan
                 layerThumbnail.src = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/4/8/12";
                 
-                // Jika satelit, ubah style polygon agar terlihat (garis putih)
-                geojsonLayer.eachLayer(layer => {
-                    if(layer !== selectedLayer) {
-                        layer.setStyle({ color: '#ffffff', opacity: 0.6 });
-                    }
-                });
+                // Jika ada batas wilayah aktif, beri border putih agar kontras di peta satelit gelap
+                if (activeSearchLayer) {
+                    activeSearchLayer.setStyle({ color: '#ffffff' });
+                }
             } else {
                 map.removeLayer(satelliteLayer);
                 streetLayer.addTo(map);
                 currentLayer = 'street';
-                // Ubah thumbnail ke satelit
                 layerThumbnail.src = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/4/8/12";
                 
-                // Kembalikan style default (garis abu)
-                geojsonLayer.eachLayer(layer => {
-                    if(layer !== selectedLayer) {
-                        layer.setStyle({ color: '#666', opacity: 0.4 });
-                    }
-                });
+                if (activeSearchLayer) {
+                    activeSearchLayer.setStyle({ color: '#1a73e8' });
+                }
             }
         });
 
-        // Menyembunyikan panel jika klik area kosong di peta
-        map.on('click', function(e) {
-            // Logika Leaflet: Jika yang diklik adalah peta dasar (bukan polygon), tutup panel
-            // Namun Leaflet mengeksekusi klik polygon dan map secara berurutan.
-            // Fitur di bawah cukup aman karena stopPropagation tidak sepenuhnya diperlukan jika UI logic solid.
-            closePanel();
+        // Tutup hasil pencarian jika klik area kosong di peta
+        map.on('click', function() {
+            searchResultsContainer.classList.add('hidden');
         });
 
-        // Muat Data GeoJSON
-        async function initMapData() {
-            const geojsonUrl = 'https://raw.githubusercontent.com/superpikar/indonesia-geojson/master/indonesia-province-simple.json';
-            
-            try {
-                const response = await fetch(geojsonUrl);
-                const data = await response.json();
-                
-                geojsonLayer = L.geoJSON(data, {
-                    style: baseStyle,
-                    onEachFeature: onEachFeature
-                }).addTo(map);
-
-                // Hilangkan layar loading
-                const loadingScreen = document.getElementById('loading-screen');
-                loadingScreen.classList.add('opacity-0');
-                setTimeout(() => loadingScreen.remove(), 500);
-
-            } catch (error) {
-                console.error("Gagal memuat GeoJSON:", error);
-                document.querySelector('#loading-screen h1').innerText = "Gagal memuat data spasial. Silakan muat ulang.";
-                document.querySelector('#loading-screen h1').classList.add('text-red-500');
-                document.querySelector('#loading-screen div').style.display = 'none';
-            }
-        }
-
-        window.onload = initMapData;
+        // Sembunyikan layer provinsi awal secara bawaan agar peta bersih,
+        // namun bisa diaktifkan jika diperlukan fitur on-hover seluruh provinsi.
+        // Karena fokus sekarang adalah pencarian mendalam, UI bersih ala Google Maps lebih cocok.
     </script>
 </body>
 </html>
